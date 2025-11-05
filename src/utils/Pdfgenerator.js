@@ -153,12 +153,12 @@ class PDFGenerator {
         .font("Helvetica-Bold")
         .text(ticket.name.toUpperCase(), leftSectionX, currentY);
       currentY += 18;
-      doc
-        .fillColor("#ffffff")
-        .fontSize(10)
-        .font("Helvetica")
-        .text(`${ticket.phone}`, leftSectionX, currentY);
-      currentY += 15;
+      // doc
+      //   .fillColor("#ffffff")
+      //   .fontSize(10)
+      //   .font("Helvetica")
+      //   .text(`${ticket.phone}`, leftSectionX, currentY);
+      // currentY += 15;
       doc
         .fillColor("#ffffff")
         .fontSize(9)
