@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: didi-postgres
     restart: unless-stopped
