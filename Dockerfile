@@ -20,16 +20,8 @@ COPY . .
 # Créer les dossiers nécessaires
 RUN mkdir -p logs public/tickets
 
-# Ajouter un utilisateur non-root
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
-USER nodejs
-
 # Exposer le port
 EXPOSE 5000
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:5000/health || exit 1
-
 # Démarrage de l'application
-CMD ["node", "server.js"]
+CMD ["npm", "start"]

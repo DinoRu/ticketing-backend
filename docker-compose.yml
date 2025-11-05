@@ -8,9 +8,9 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: tickets
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -25,13 +25,20 @@ services:
 
   backend:
     build: .
-    container_name: didi-backend
+    container_name: api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      - NODE_EN=production
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=tickets
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
     volumes:
       - ./logs:/app/logs
       - ./public/tickets:/app/public/tickets
