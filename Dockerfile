@@ -1,36 +1,38 @@
 # ===============================================
-# Dockerfile Production
+# Dockerfile Production corrigé
 # ===============================================
 FROM node:18-alpine
 
-# Définir le répertoire de travail
 WORKDIR /app
 
-# Installer curl si besoin pour healthcheck
+# Installer curl pour healthcheck
 RUN apk add --no-cache curl
 
-# Copier uniquement les fichiers de dépendances
+# Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Installer les dépendances de production
+# Installer uniquement les dépendances de production
 RUN npm install --omit=dev
 
-# Copier tout le code source
+# Copier le reste du code source
 COPY . .
 
-# Créer les dossiers nécessaires et définir les permissions
+# Copier aussi ton .env (nécessaire à ton script config.js)
+COPY .env .env
+
+# Créer les dossiers nécessaires
 RUN mkdir -p logs public/tickets
 
-# Optionnel : exécuter l'application en tant qu'utilisateur non-root
+# Ajouter un utilisateur non-root
 RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
 USER nodejs
 
 # Exposer le port
 EXPOSE 5000
 
-# Healthcheck (optionnel)
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:5000/health || exit 1
 
-# Commande de démarrage
+# Démarrage de l'application
 CMD ["node", "server.js"]
