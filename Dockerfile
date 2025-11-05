@@ -17,9 +17,6 @@ RUN npm install --omit=dev
 # Copier le reste du code source
 COPY . .
 
-# Copier aussi ton .env (nécessaire à ton script config.js)
-COPY .env .env
-
 # Créer les dossiers nécessaires
 RUN mkdir -p logs public/tickets
 
