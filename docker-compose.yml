@@ -28,7 +28,7 @@ services:
     container_name: didi-backend
     restart: unless-stopped
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
     env_file:
       - .env
