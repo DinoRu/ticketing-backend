@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Définir les niveaux de log personnalisés
+// Niveaux de log personnalisés
 const levels = {
   error: 0,
   warn: 1,
@@ -16,7 +16,7 @@ const levels = {
   debug: 4,
 };
 
-// Définir les couleurs pour chaque niveau
+// Couleurs pour la console
 const colors = {
   error: "red",
   warn: "yellow",
@@ -27,7 +27,7 @@ const colors = {
 
 winston.addColors(colors);
 
-// Format pour les logs
+// Format JSON pour fichiers
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   winston.format.errors({ stack: true }),
@@ -35,7 +35,7 @@ const logFormat = winston.format.combine(
   winston.format.json()
 );
 
-// Format pour la console (plus lisible)
+// Format lisible pour console
 const consoleFormat = winston.format.combine(
   winston.format.colorize({ all: true }),
   winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
@@ -44,20 +44,24 @@ const consoleFormat = winston.format.combine(
   )
 );
 
-// Configuration des transports
+// Transports
 const transports = [];
 
-// Console transport (toujours actif en développement)
-if (config.server.env !== "production") {
-  transports.push(
-    new winston.transports.Console({
-      format: consoleFormat,
-      level: config.logging.level,
-    })
-  );
-}
+// Console transport (toujours actif)
+transports.push(
+  new winston.transports.Console({
+    format:
+      config.server.env === "production"
+        ? winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.simple()
+          )
+        : consoleFormat,
+    level: config.logging.level,
+  })
+);
 
-// File transport pour tous les logs
+// Fichiers logs (tous les niveaux)
 transports.push(
   new DailyRotateFile({
     filename: path.join(__dirname, "../../logs/app-%DATE%.log"),
@@ -70,7 +74,7 @@ transports.push(
   })
 );
 
-// File transport pour les erreurs uniquement
+// Fichiers logs (erreurs uniquement)
 transports.push(
   new DailyRotateFile({
     filename: path.join(__dirname, "../../logs/error-%DATE%.log"),
@@ -83,7 +87,7 @@ transports.push(
   })
 );
 
-// Créer le logger
+// Création du logger
 const logger = winston.createLogger({
   levels,
   format: logFormat,
@@ -91,7 +95,7 @@ const logger = winston.createLogger({
   exitOnError: false,
 });
 
-// Créer des méthodes helper pour faciliter l'utilisation
+// Méthodes helper
 logger.logRequest = (req, res, duration) => {
   logger.http(
     `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms - ${req.ip}`
@@ -125,18 +129,5 @@ logger.logTicket = (action, ticketId, userId) => {
 logger.logSecurity = (message, data = {}) => {
   logger.warn(`Security: ${message}`, data);
 };
-
-// En production, log aussi dans la console
-if (config.server.env === "production") {
-  transports.push(
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.simple()
-      ),
-      level: "info",
-    })
-  );
-}
 
 export default logger;
