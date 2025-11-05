@@ -43,17 +43,37 @@ const seedUsers = async () => {
       },
       {
         username: "vendor_test",
-        password: vendeurPassword,
+        password: "vendor123!",
         name: "Kofi Mensah",
         phone: "+7 999 111 1111",
         role: "vendeur",
       },
-
+      {
+        username: "vendeur2",
+        password: vendeurPassword,
+        name: "Ama Sarpong",
+        phone: "+7 999 222 2222",
+        role: "vendeur",
+      },
+      {
+        username: "vendeur3",
+        password: vendeurPassword,
+        name: "Kwame Asante",
+        phone: "+7 999 333 3333",
+        role: "vendeur",
+      },
       {
         username: "controleur1",
         password: controleurPassword,
         name: "Jean Contrôleur",
         phone: "+7 999 444 4444",
+        role: "controleur",
+      },
+      {
+        username: "controleur2",
+        password: controleurPassword,
+        name: "Lucie Scanner",
+        phone: "+7 999 555 5555",
         role: "controleur",
       },
     ];
@@ -72,7 +92,10 @@ const seedUsers = async () => {
     logger.info("\n📋 Comptes créés:");
     logger.info("   👑 Admin: admin / admin123");
     logger.info("   💼 Vendeur 1: vendeur1 / vend123");
+    logger.info("   💼 Vendeur 2: vendeur2 / vend123");
+    logger.info("   💼 Vendeur 3: vendeur3 / vend123");
     logger.info("   🎫 Contrôleur 1: controleur1 / ctrl123");
+    logger.info("   🎫 Contrôleur 2: controleur2 / ctrl123");
   } catch (error) {
     logger.error("❌ Erreur lors du seeding:", error);
     throw error;
