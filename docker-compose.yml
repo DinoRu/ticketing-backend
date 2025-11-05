@@ -1,16 +1,14 @@
 version: '3.8'
 
 services:
-  # ==========================
   # PostgreSQL Database
-  # ==========================
   postgres:
     image: postgres:15-alpine
     container_name: didi-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME:-didi_ticketing}
+      POSTGRES_USER: ${DB_USER:-didi_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     volumes:
@@ -21,14 +19,12 @@ services:
     networks:
       - didi-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-didi_user} -d ${DB_NAME:-didi_ticketing}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ==========================
-  # Backend Node.js API
-  # ==========================
+  # Backend API
   backend:
     build:
       context: .
@@ -40,6 +36,22 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-didi_ticketing}
+      DB_USER: ${DB_USER:-didi_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSL: ${DB_SSL:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
     volumes:
       - ./logs:/app/logs
       - ./public/tickets:/app/public/tickets
@@ -48,22 +60,19 @@ services:
     networks:
       - didi-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://0.0.0.0:5000/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # ==========================
-  # Nginx Reverse Proxy
-  # ==========================
+  # Nginx Reverse Proxy (Optionnel mais recommandé)
   nginx:
     image: nginx:alpine
     container_name: didi-nginx
     restart: unless-stopped
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     ports:
       - "80:80"
       - "443:443"
@@ -74,14 +83,11 @@ services:
     networks:
       - didi-network
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-# ==========================
-# Networks & Volumes
-# ==========================
 networks:
   didi-network:
     driver: bridge
