@@ -31,6 +31,7 @@ const __dirname = path.dirname(__filename);
 
 // Créer l'application Express
 const app = express();
+app.set("trust proxy", true);
 
 // ======================
 // CONFIGURATION SÉCURITÉ
@@ -180,14 +181,14 @@ const gracefulShutdown = async (signal) => {
   logger.info(`Signal ${signal} reçu. Arrêt gracieux...`);
 
   try {
-    // Fermer le pool de connexions
-    await database.closePool();
-    logger.info("Pool de connexions fermé");
-
-    // Nettoyer les tokens expirés
+    // Nettoyer les tokens expirés AVANT de fermer le pool
     const AuthService = (await import("./services/AuthService.js")).default;
     await AuthService.cleanExpiredTokens();
     logger.info("Tokens expirés nettoyés");
+
+    // Fermer le pool de connexions
+    await database.closePool();
+    logger.info("Pool de connexions fermé");
 
     logger.info("Arrêt gracieux terminé");
     process.exit(0);
