@@ -31,7 +31,7 @@ const __dirname = path.dirname(__filename);
 
 // Créer l'application Express
 const app = express();
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 // ======================
 // CONFIGURATION SÉCURITÉ
