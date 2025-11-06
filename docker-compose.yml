@@ -1,61 +1,200 @@
 version: '3.8'
 
 services:
+  # ============================================
+  # PostgreSQL Database avec persistence garantie
+  # ============================================
   db:
     image: postgres:15-alpine
     container_name: didi-postgres
-    restart: unless-stopped
+    restart: always  # TOUJOURS redémarrer
     env_file:
       - .env
     environment:
-      POSTGRES_DB: tickets
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${DB_NAME:-didi_ticketing}
+      POSTGRES_USER: ${DB_USER:-didi_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      # Optimisations PostgreSQL pour la stabilité
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --data-checksums"
+      # Configurations pour éviter les déconnexions
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
+      # Volume nommé persistant (CRITIQUE)
       - postgres_data:/var/lib/postgresql/data
+      # Backup automatique local (double sécurité)
+      - ./backups/postgres:/backups
+      # Script d'init si besoin
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     networks:
       - didi-network
+    # Healthcheck robuste
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-didi_user} -d ${DB_NAME:-didi_ticketing} || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    # Limites de ressources pour éviter les crashes
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    # Politique de logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ============================================
+  # Backend API avec healthcheck corrigé
+  # ============================================
   backend:
-    build: .
-    container_name: api
-    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    image: didi-ticketing-backend:latest
+    container_name: didi-backend
+    restart: always  # TOUJOURS redémarrer
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - NODE_EN=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=tickets
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      NODE_ENV: production
+      PORT: 5000
+      HOST: 0.0.0.0
+      # Variables DB (override .env si besoin)
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-didi_ticketing}
+      DB_USER: ${DB_USER:-didi_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Pool de connexions optimisé
+      DB_POOL_MIN: 2
+      DB_POOL_MAX: 10
+      DB_POOL_IDLE_TIMEOUT: 30000
+      DB_CONNECTION_TIMEOUT: 5000
+      # Reconnexion automatique
+      DB_RECONNECT: true
+      DB_RECONNECT_TRIES: 10
     volumes:
+      # Logs persistants
       - ./logs:/app/logs
+      # Tickets PDFs persistants
       - ./public/tickets:/app/public/tickets
+      # Backup de la config (lecture seule)
+      - ./.env:/app/.env:ro
     ports:
       - "5000:5000"
     networks:
       - didi-network
+    # Healthcheck SANS curl (utilise node directement)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+    # Limites de ressources
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ============================================
+  # Service de Backup Automatique (NOUVEAU!)
+  # ============================================
+  backup:
+    image: postgres:15-alpine
+    container_name: didi-backup
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-didi_ticketing}
+      DB_USER: ${DB_USER:-didi_user}
+      PGPASSWORD: ${DB_PASSWORD}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-3600}  # Backup toutes les heures
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}   # Garder 7 jours
+    volumes:
+      - ./backups/auto:/backups
+    networks:
+      - didi-network
+    # Script de backup automatique
+    command: >
+      sh -c '
+        echo "🔄 Service de backup automatique démarré"
+        echo "📊 Backup toutes les $$BACKUP_INTERVAL secondes"
+        echo "🗂️  Conservation: $$BACKUP_KEEP_DAYS jours"
+        
+        while true; do
+          TIMESTAMP=$$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="/backups/auto_backup_$$TIMESTAMP.sql"
+          
+          echo "💾 Création backup: $$BACKUP_FILE"
+          
+          if pg_dump -h $$DB_HOST -U $$DB_USER -d $$DB_NAME > $$BACKUP_FILE 2>/dev/null; then
+            echo "✅ Backup créé avec succès: $$(ls -lh $$BACKUP_FILE | awk "{print \$$5}")"
+            
+            # Compresser le backup
+            gzip $$BACKUP_FILE
+            echo "📦 Backup compressé: $$BACKUP_FILE.gz"
+            
+            # Nettoyer les anciens backups
+            find /backups -name "auto_backup_*.sql.gz" -mtime +$$BACKUP_KEEP_DAYS -delete
+            echo "🧹 Anciens backups supprimés (>$$BACKUP_KEEP_DAYS jours)"
+          else
+            echo "❌ Erreur lors de la création du backup"
+          fi
+          
+          echo "⏳ Prochain backup dans $$BACKUP_INTERVAL secondes..."
+          sleep $$BACKUP_INTERVAL
+        done
+      '
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+# ============================================
+# Networks
+# ============================================
 networks:
   didi-network:
     driver: bridge
+    name: didi-network
 
+# ============================================
+# Volumes avec configuration robuste
+# ============================================
 volumes:
+  # Volume PostgreSQL - PERSISTENCE GARANTIE
   postgres_data:
+    driver: local
+    name: didi-postgres-data
+    # Options pour garantir la persistence
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data/postgres
